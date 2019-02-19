@@ -40,7 +40,6 @@ class OPQ(object):
             self.pq.class_message(), self.M, self.Ks, self.code_dtype)
 
     def fit(self, vecs, iter):
-
         assert vecs.dtype == np.float32
         assert vecs.ndim == 2
         _, D = vecs.shape

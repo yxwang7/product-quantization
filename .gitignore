@@ -326,3 +326,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# OSX directory file
+.DS_Store
+
+# Visual Studio Code configuration
+.vscode/

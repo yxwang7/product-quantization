@@ -2,7 +2,7 @@ from sorter import *
 from transformer import *
 from vecs_io import loader
 from prettytable import PrettyTable
-
+import time
 
 def chunk_encode(mpq, vecs):
     chunk_size = 1000000
@@ -17,6 +17,17 @@ def chunk_encode(mpq, vecs):
     return encoded_vecs
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
+    f = open('result.txt', 'w')
+    f.write('################################################################')
+    f.write('################################################################\n')
+    f.write('################################################################')
+    f.write('################################################################\n')
+    if T is None:
+        f.write('# Training data size: {t}; query size: {q}.\n'.format(t=X.shape, q=Q.shape))
+    else:
+        f.write('# Training data size: {t}; query size: {q}.\n'.format(t=T.shape, q=Q.shape))
+    f.write('# Metric: {m}, #PQ Tables:{t}.\n'.format(m=metric, t=mpq.numTable))
+    start_time = time.time()
     np.random.seed(123)
     print("# Ranking metric {}".format(metric))
     print("# " + mpq.class_message())
@@ -24,6 +35,7 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
         mpq.fit(X[:train_size].astype(dtype=np.float32), iter=20)
     else:
         mpq.fit(T.astype(dtype=np.float32), iter=20)
+    train_time = time.time()
 
     print('# Encoding dataset and queries...')
     vecs_encoded = chunk_encode(mpq, X)
@@ -32,6 +44,8 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     #print(vecs_encoded.shape)
     # print(query_encoded.shape)
     #print(Q.shape)
+
+    encode_time = time.time()
 
     query_encoded = np.transpose(query_encoded, (1, 0, 2))
     # print(query_encoded.shape)
@@ -42,12 +56,22 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     recalls = BatchSorter(vecs_encoded, query_encoded, X, G, Ts, metric='multitable', batch_size=200).recall()
     print("# Finish searching!\n")
 
+    finish_time = time.time()
+    f.write('# Training time:{t}.\n'.format(t=train_time - start_time))
+    f.write('# Encoding time:{t}.\n'.format(t=encode_time - train_time))
+    f.write('# Query time:{t}.\n'.format(t=finish_time - encode_time))
+    f.write('################################################################')
+    f.write('################################################################\n')
+    f.write('################################################################')
+    f.write('################################################################\n')
+
     table = PrettyTable()
     table.field_names = ["Expected Items", "Overall time", "AVG Recall", "AVG precision", "AVG error", "AVG items"]
     for i, (t, recall) in enumerate(zip(Ts, recalls)):
         table.add_row([2 ** i, 0, recall, recall * len(G[0]) / t, 0, t])
-    
     print(table)
+    f.write(table.get_string())
+    f.close()
     # print("expected items, overall time, avg recall, avg precision, avg error, avg items")
     # for i, (t, recall) in enumerate(zip(Ts, recalls)):
     #     print("{}, {}, {}, {}, {}, {}".format(

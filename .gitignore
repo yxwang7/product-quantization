@@ -331,3 +331,6 @@ venv.bak/
 
 # Visual Studio Code configuration
 .vscode/
+
+# Result document
+result.txt

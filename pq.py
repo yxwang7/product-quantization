@@ -80,11 +80,12 @@ class PQ(object):
         return self.decode(self.encode(vecs))
 
 class MPQ(object):
+    @nb.jit
     def __init__(self, numTable, M, Ks, verbose=True):
         self.numTable, self.M, self.Ks, self.verbose = numTable, M, Ks, verbose
         self.tables = []
         self.code_dtype = np.uint8 if Ks <= 2 ** 8 else (np.uint16 if Ks <= 2 ** 16 else np.uint32)
-        for _ in range(self.numTable):
+        for _ in nb.prange(self.numTable):
             self.tables.append(PQ(M=self.M, Ks=self.Ks, verbose=False))
 
     def class_message(self):

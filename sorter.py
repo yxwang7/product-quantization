@@ -61,7 +61,7 @@ def euclidean_norm_arg_sort(q, compressed, norms_sqr):
 @nb.jit
 def multiple_table_sort(q_encoded, vecs_encoded):
     distances = np.zeros(vecs_encoded.shape[1], dtype=np.int32)
-    mid = np.product((q_encoded != np.transpose(vecs_encoded, (1,0,2)).astype(int)), axis=2)
+    mid = np.product(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2)
         # for i in nb.prange(vecs_encoded.shape[1]):
         #     distances[h, i] = 0 if np.array_equal(q_encoded[h, :], vecs_encoded[h, i, :]) else 1
     distances = np.sum(mid, axis=1) / len(q_encoded)

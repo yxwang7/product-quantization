@@ -3,12 +3,13 @@ from transformer import *
 from vecs_io import loader
 from prettytable import PrettyTable
 import time
+import numba as nb
 
 def chunk_encode(mpq, vecs):
     chunk_size = 1000000
     encoded_vecs = np.empty(shape=(mpq.numTable, len(vecs), mpq.M), dtype=np.float32)
     
-    for h in range(mpq.numTable):
+    for h in nb.prange(mpq.numTable):
         # for i in tqdm.tqdm(range(math.ceil(len(vecs) / chunk_size))):
         for i in range(math.ceil(len(vecs) / chunk_size)):
             encoded_vecs[h, i * chunk_size: (i + 1) * chunk_size, :] \

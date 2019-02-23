@@ -106,7 +106,7 @@ class MPQ(object):
         assert vecs.ndim == 2
         N, D = vecs.shape
         codes = np.empty((self.numTable, N, self.tables[0].M), dtype=self.code_dtype)
-        for i in range(self.numTable):
+        for i in nb.prange(self.numTable):
             codes[i, :, :] = self.tables[i].encode(vecs)
         return codes
 
@@ -115,7 +115,7 @@ class MPQ(object):
         nTable, N, M = codes.shape
         assert nTable == self.numTable
         vecs = np.empty((self.numTable, N, self.tables[0].Dim), dtype=np.float32)
-        for i in range(self.numTable):
+        for i in nb.prange(self.numTable):
             vecs[i, :, :] = self.tables[i].decode(codes[i, :, :])
         return np.array(vecs)
 

@@ -142,7 +142,7 @@ class BatchSorter(object):
         self.Q = Q
         self.X = X
         self.recalls = np.zeros(shape=(len(Ts)))
-        for i in range(math.ceil(len(Q) / float(batch_size))):
+        for i in tqdm.tqdm(range(math.ceil(len(Q) / float(batch_size)))):
             q = None
             if metric == 'multitable':
                 q = Q[i * batch_size: (i + 1) * batch_size, :, :]

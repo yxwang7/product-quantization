@@ -85,23 +85,24 @@ class MPQ(object):
     def __init__(self, numTable, M, Ks, verbose=True):
         self.numTable, self.M, self.Ks, self.verbose = numTable, M, Ks, verbose
         self.tables = []
-        self.code_dtype = np.uint8 if Ks <= 2 ** 8 else (np.uint16 if Ks <= 2 ** 16 else np.uint32)
+        self.code_dtype = np.uint8 if Ks <= 2 ** 8 else (
+            np.uint16 if Ks <= 2 ** 16 else np.uint32)
         for _ in nb.prange(self.numTable):
             self.tables.append(PQ(M=self.M, Ks=self.Ks, verbose=False))
-        self.permutations = None
 
     def class_message(self):
         return "#PQ Table: {}, ".format(self.numTable) + self.tables[0].class_message()
 
     def fit(self, vecs, iter):
         print('\n# Start training...')
+
         # generate (self.numTable) ways of index permutations and store it
         self.permutations = [np.random.rand(
             vecs.shape[1]).argsort() for i in nb.prange(self.numTable)]
         if(self.verbose):
             for i in tqdm.tqdm(nb.prange(self.numTable)):
                 self.tables[i].fit(vecs[:, self.permutations[i]], iter)
-        else: 
+        else:
             for i in nb.prange(self.numTable):
                 self.tables[i].fit(vecs[:, self.permutations[i]], iter)
         print('# Training finish!\n')
@@ -110,9 +111,11 @@ class MPQ(object):
         assert vecs.dtype == np.float32
         assert vecs.ndim == 2
         N, D = vecs.shape
-        codes = np.empty((self.numTable, N, self.tables[0].M), dtype=self.code_dtype)
+        codes = np.empty(
+            (self.numTable, N, self.tables[0].M), dtype=self.code_dtype)
         for i in nb.prange(self.numTable):
-            codes[i, :, :] = self.tables[i].encode(vecs[:, self.permutations[i]])
+            codes[i, :, :] = self.tables[i].encode(
+                vecs[:, self.permutations[i]])
         return codes
 
     def decode(self, codes):

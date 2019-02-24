@@ -3,20 +3,22 @@ from transformer import *
 from vecs_io import loader
 from prettytable import PrettyTable
 import time
-import numba as nb
+
 
 def chunk_encode(mpq, vecs):
     chunk_size = 1000000
-    encoded_vecs = np.empty(shape=(mpq.numTable, len(vecs), mpq.M), dtype=np.float32)
-    
-    for h in nb.prange(mpq.numTable):
+    encoded_vecs = np.empty(
+        shape=(mpq.numTable, len(vecs), mpq.M), dtype=np.float32)
+
+    for h in range(mpq.numTable):
         # for i in tqdm.tqdm(range(math.ceil(len(vecs) / chunk_size))):
         shuffled_vecs = np.take(vecs, mpq.permutations[h], axis=1)
-        for i in nb.prange(math.ceil(len(shuffled_vecs) / chunk_size)):
+        for i in range(math.ceil(len(shuffled_vecs) / chunk_size)):
             encoded_vecs[h, i * chunk_size: (i + 1) * chunk_size, :] \
                 = mpq.tables[h].encode(shuffled_vecs[i * chunk_size: (i + 1) * chunk_size, :].astype(dtype=np.float32))
 
     return encoded_vecs
+
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
     f = open('{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=Q.shape[0]), 'w')
@@ -25,10 +27,13 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     f.write('################################################################')
     f.write('################################################################\n')
     if T is None:
-        f.write('# Training data size: {t}; query size: {q}.\n'.format(t=X.shape, q=Q.shape))
+        f.write('# Training data size: {t}; query size: {q}.\n'.format(
+            t=X.shape, q=Q.shape))
     else:
-        f.write('# Training data size: {t}; query size: {q}.\n'.format(t=T.shape, q=Q.shape))
-    f.write('# Metric: {m}, #PQ Tables:{t}.\n'.format(m=metric, t=mpq.numTable))
+        f.write('# Training data size: {t}; query size: {q}.\n'.format(
+            t=T.shape, q=Q.shape))
+    f.write('# Metric: {m}, #PQ Tables:{t}.\n'.format(
+        m=metric, t=mpq.numTable))
     start_time = time.time()
     np.random.seed(123)
     print("# Ranking metric {}".format(metric))
@@ -43,19 +48,20 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     vecs_encoded = chunk_encode(mpq, X)
     query_encoded = chunk_encode(mpq, Q)
 
-    #print(vecs_encoded.shape)
+    # print(vecs_encoded.shape)
     # print(query_encoded.shape)
-    #print(Q.shape)
+    # print(Q.shape)
 
     encode_time = time.time()
 
     query_encoded = np.transpose(query_encoded, (1, 0, 2))
     # print(query_encoded.shape)
-    #print('{}'.format(query_encoded.shape[0]==Q.shape[0]))
-    
+    # print('{}'.format(query_encoded.shape[0]==Q.shape[0]))
+
     print("# Sorting items...")
     Ts = [2 ** i for i in range(2 + int(math.log2(len(X))))]
-    recalls = BatchSorter(vecs_encoded, query_encoded, X, G, Ts, metric='multitable', batch_size=200).recall()
+    recalls = BatchSorter(vecs_encoded, query_encoded, X,
+                          G, Ts, metric='multitable', batch_size=200).recall()
     print("# Finish searching!\n")
 
     finish_time = time.time()
@@ -68,7 +74,8 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     f.write('################################################################\n')
 
     table = PrettyTable()
-    table.field_names = ["Expected Items", "Overall time", "AVG Recall", "AVG precision", "AVG error", "AVG items"]
+    table.field_names = ["Expected Items", "Overall time",
+                         "AVG Recall", "AVG precision", "AVG error", "AVG items"]
     for i, (t, recall) in enumerate(zip(Ts, recalls)):
         table.add_row([2 ** i, 0, recall, recall * len(G[0]) / t, 0, t])
     print(table)
@@ -79,18 +86,24 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     #     print("{}, {}, {}, {}, {}, {}".format(
     #         2**i, 0, recall, recall * len(G[0]) / t, 0, t))
 
+
 def parse_args():
     # override default parameters with command line parameters
     import argparse
-    parser = argparse.ArgumentParser(description='Process input method and parameters.')
-    parser.add_argument('--num_table', type=int, help='choose the number of PQ tables')
+    parser = argparse.ArgumentParser(
+        description='Process input method and parameters.')
+    parser.add_argument('--num_table', type=int,
+                        help='choose the number of PQ tables')
     parser.add_argument('--dataset', type=str, help='choose data set name')
-    parser.add_argument('--topk', type=int, help='required topk of ground truth')
+    parser.add_argument('--topk', type=int,
+                        help='required topk of ground truth')
     parser.add_argument('--metric', type=str, help='metric of ground truth')
     parser.add_argument('--num_codebook', type=int, help='number of codebooks')
-    parser.add_argument('--Ks', type=int, help='number of centroids in each quantizer')
+    parser.add_argument(
+        '--Ks', type=int, help='number of centroids in each quantizer')
     args = parser.parse_args()
     return args.dataset, args.topk, args.num_codebook, args.Ks, args.metric, args.num_table
+
 
 if __name__ == '__main__':
     dataset = 'netflix'

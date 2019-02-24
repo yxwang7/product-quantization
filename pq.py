@@ -43,8 +43,9 @@ class PQ(object):
             # All columns and specific roes
             vecs_sub = vecs[:, self.Ds[m]:self.Ds[m+1]]
             # dims_width[m] = self.Ds[m+1] - self.Ds[m]
+            # Gaussian distribution initialization
             self.codewords[m, :, :self.Ds[m+1] - self.Ds[m]], _ = kmeans2(
-                vecs_sub, self.Ks, iter=iter, minit='points')
+                vecs_sub, self.Ks, iter=iter, minit='random')
 
         return self
 
@@ -87,18 +88,22 @@ class MPQ(object):
         self.code_dtype = np.uint8 if Ks <= 2 ** 8 else (np.uint16 if Ks <= 2 ** 16 else np.uint32)
         for _ in nb.prange(self.numTable):
             self.tables.append(PQ(M=self.M, Ks=self.Ks, verbose=False))
+        self.permutations = None
 
     def class_message(self):
         return "#PQ Table: {}, ".format(self.numTable) + self.tables[0].class_message()
 
     def fit(self, vecs, iter):
         print('\n# Start training...')
+        # generate (self.numTable) ways of index permutations and store it
+        self.permutations = [np.random.rand(
+            vecs.shape[1]).argsort() for i in nb.prange(self.numTable)]
         if(self.verbose):
             for i in tqdm.tqdm(nb.prange(self.numTable)):
-                self.tables[i].fit(vecs, iter)
+                self.tables[i].fit(vecs[:, self.permutations[i]], iter)
         else: 
             for i in nb.prange(self.numTable):
-                self.tables[i].fit(vecs, iter)
+                self.tables[i].fit(vecs[:, self.permutations[i]], iter)
         print('# Training finish!\n')
 
     def encode(self, vecs):
@@ -107,7 +112,7 @@ class MPQ(object):
         N, D = vecs.shape
         codes = np.empty((self.numTable, N, self.tables[0].M), dtype=self.code_dtype)
         for i in nb.prange(self.numTable):
-            codes[i, :, :] = self.tables[i].encode(vecs)
+            codes[i, :, :] = self.tables[i].encode(vecs[:, self.permutations[i]])
         return codes
 
     def decode(self, codes):
@@ -117,6 +122,8 @@ class MPQ(object):
         vecs = np.empty((self.numTable, N, self.tables[0].Dim), dtype=np.float32)
         for i in nb.prange(self.numTable):
             vecs[i, :, :] = self.tables[i].decode(codes[i, :, :])
+            # Need verification
+            vecs = vecs[:, self.permutations[i].argsort()]
         return np.array(vecs)
 
     def compress(self, vecs):

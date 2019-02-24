@@ -11,14 +11,15 @@ def chunk_encode(mpq, vecs):
     
     for h in nb.prange(mpq.numTable):
         # for i in tqdm.tqdm(range(math.ceil(len(vecs) / chunk_size))):
-        for i in range(math.ceil(len(vecs) / chunk_size)):
+        shuffled_vecs = np.take(vecs, mpq.permutations[h], axis=1)
+        for i in nb.prange(math.ceil(len(shuffled_vecs) / chunk_size)):
             encoded_vecs[h, i * chunk_size: (i + 1) * chunk_size, :] \
-                = mpq.tables[h].encode(vecs[i * chunk_size: (i + 1) * chunk_size, :].astype(dtype=np.float32))
+                = mpq.tables[h].encode(shuffled_vecs[i * chunk_size: (i + 1) * chunk_size, :].astype(dtype=np.float32))
 
     return encoded_vecs
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
-    f = open('result.txt', 'w')
+    f = open('{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=Q.shape[0]), 'w')
     f.write('################################################################')
     f.write('################################################################\n')
     f.write('################################################################')
@@ -114,8 +115,3 @@ if __name__ == '__main__':
     # pq, rq, or component of norm-pq
     quantizer = MPQ(numTable=num_table, M=codebook, Ks=Ks)
     execute(quantizer, X, T, Q, G, metric)
-
-
-    
-     
-        

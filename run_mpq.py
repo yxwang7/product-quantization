@@ -3,6 +3,7 @@ from transformer import *
 from vecs_io import loader
 from prettytable import PrettyTable
 import time
+import numpy as np
 
 
 def chunk_encode(mpq, vecs):
@@ -21,7 +22,9 @@ def chunk_encode(mpq, vecs):
 
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
-    f = open('{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=Q.shape[0]), 'w')
+    Q = Q[0:100, :]
+    np.random.seed(123)
+    f = open('MPQ_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), 'w')
     f.write('################################################################')
     f.write('################################################################\n')
     f.write('################################################################')

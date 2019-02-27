@@ -14,7 +14,9 @@ def chunk_compress(pq, vecs):
 
 
 def execute(pq, X, T, Q, G, metric, train_size=100000):
+    Q=Q[0:100, :]
     np.random.seed(123)
+    f = open('PQ_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=Q.shape[0]), 'w')
     print("# Ranking metric {}".format(metric))
     print("# " + pq.class_message())
     if T is None:
@@ -35,6 +37,8 @@ def execute(pq, X, T, Q, G, metric, train_size=100000):
         table.add_row([2 ** i, 0, recall, recall * len(G[0]) / t, 0, t])
     
     print(table)
+    f.write(table.get_string())
+    f.close()
     # print("expected items, overall time, avg recall, avg precision, avg error, avg items")
     # for i, (t, recall) in enumerate(zip(Ts, recalls)):
     #     print("{}, {}, {}, {}, {}, {}".format(
@@ -60,7 +64,6 @@ if __name__ == '__main__':
     codebook = 4
     Ks = 256
     metric = 'product'
-
     # override default parameters with command line parameters
     import sys
     if len(sys.argv) > 3:

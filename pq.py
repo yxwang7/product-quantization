@@ -45,7 +45,7 @@ class PQ(object):
             # dims_width[m] = self.Ds[m+1] - self.Ds[m]
             # Gaussian distribution initialization
             self.codewords[m, :, :self.Ds[m+1] - self.Ds[m]], _ = kmeans2(
-                vecs_sub, self.Ks, iter=iter, minit='random')
+                vecs_sub, self.Ks, iter=iter, minit='points')
 
         return self
 

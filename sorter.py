@@ -12,6 +12,11 @@ def arg_sort(distances): # Return indices of top-k neighbors
     indices = np.argpartition(distances, top_k)[:top_k]
     return indices[np.argsort(distances[indices])]
 
+@nb.jit
+def arg_sort_stat(distances):
+    top_k = min(131072, len(distances)-1)
+    indices = np.argpartition(distances, top_k)[:top_k]
+    return indices[np.argsort(distances[indices])], np.sort(distances)
 
 @nb.jit
 def product_arg_sort(q, compressed):
@@ -61,12 +66,20 @@ def euclidean_norm_arg_sort(q, compressed, norms_sqr):
 @nb.jit
 def multiple_table_sort(q_encoded, vecs_encoded):
     distances = np.zeros(vecs_encoded.shape[1], dtype=np.int32)
-    mid = np.product(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2)
+    mid = np.sum(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2).astype(bool)
+        # for i in nb.prange(vecs_encoded.shape[1]):
+        #     distances[h, i] = 0 if np.array_equal(q_encoded[h, :], vecs_encoded[h, i, :]) else 1
+    distances = np.sum(mid.astype(int), axis=1)
+    return arg_sort_stat(distances)
+
+@nb.jit
+def multiple_hamming_sort(q_encoded, vecs_encoded):
+    distances = np.zeros(vecs_encoded.shape[1], dtype=np.int32)
+    mid = np.sum(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2) / q_encoded.shape[1]
         # for i in nb.prange(vecs_encoded.shape[1]):
         #     distances[h, i] = 0 if np.array_equal(q_encoded[h, :], vecs_encoded[h, i, :]) else 1
     distances = np.sum(mid, axis=1) / len(q_encoded)
-    return arg_sort(distances)
-    
+    return arg_sort_stat(distances)
 
 @nb.jit
 def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
@@ -79,7 +92,8 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
     :return:
     """
     rank = None
-    if(metric == 'multitable'):
+    dist_sum = np.zeros(compressed.shape[1])
+    if metric == 'multitable' or metric == 'multihamming':
         rank = np.empty((Q.shape[0], min(131072, compressed.shape[1]-1)), dtype=np.int32)
     else:
         rank = np.empty((Q.shape[0], min(131072, compressed.shape[0]-1)), dtype=np.int32)
@@ -101,12 +115,16 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
             rank[i, :] = euclidean_norm_arg_sort(Q[i], compressed, norms_sqr)
     elif metric == 'multitable':
         for i in p_range:
-            rank[i, :] = multiple_table_sort(Q[i], compressed)
+            rank[i, :], x = multiple_table_sort(Q[i], compressed)
+            dist_sum = dist_sum + x
+    elif metric == 'multihamming':
+        for i in p_range:
+            rank[i, :], x = multiple_hamming_sort(Q[i], compressed)
+            dist_sum = dist_sum + x
     else:
         for i in p_range:
             rank[i, :] = euclidean_arg_sort(Q[i], compressed)
-
-    return rank # rank: sizeof(Q) \times top-k matrix
+    return rank, dist_sum.astype(int) # rank: sizeof(Q) \times top-k matrix
 
 
 @nb.jit
@@ -121,7 +139,7 @@ class Sorter(object):
     def __init__(self, compressed, Q, X, metric, norms_sqr=None):
         self.Q = Q
         self.X = X
-        self.topK = parallel_sort(metric, compressed, Q, X, norms_sqr=norms_sqr)
+        self.topK, self.dist_sum = parallel_sort(metric, compressed, Q, X, norms_sqr=norms_sqr)  
 
     def recall(self, G, T):
         t = min(T, len(self.topK[0]))
@@ -142,9 +160,10 @@ class BatchSorter(object):
         self.Q = Q
         self.X = X
         self.recalls = np.zeros(shape=(len(Ts)))
+        self.collide_stats = np.zeros(compressed.shape[1])
         for i in tqdm.tqdm(range(math.ceil(len(Q) / float(batch_size)))):
             q = None
-            if metric == 'multitable':
+            if metric == 'multitable' or metric == 'multihamming':
                 q = Q[i * batch_size: (i + 1) * batch_size, :, :]
             else:
                 q = Q[i * batch_size: (i + 1) * batch_size, :]
@@ -152,7 +171,15 @@ class BatchSorter(object):
             # compressed: compressed database; q: part of query; X: original database
             sorter = Sorter(compressed, q, X, metric=metric, norms_sqr=norms_sqr)
             self.recalls[:] = self.recalls[:] + [sorter.sum_recall(g, t) for t in Ts]
+            self.collide_stats = self.collide_stats + sorter.dist_sum
         self.recalls = self.recalls / len(self.Q)
+        self.collide_stats /= len(self.Q)
 
     def recall(self):
         return self.recalls
+
+    def collide_stat(self):
+        return self.collide_stats
+
+    def result(self):
+        return self.recalls, self.collide_stats

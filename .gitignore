@@ -333,4 +333,5 @@ venv.bak/
 .vscode/
 
 # Result document
-result.txt
+data/result/
+test.sh

@@ -56,7 +56,7 @@ class PQ(object):
 
         # codes[n][m] : code of n-th vec, m-th subspace
         codes = np.empty((N, self.M), dtype=self.code_dtype)
-        for m in range(self.M):
+        for m in nb.prange(self.M):
             vecs_sub = vecs[:, self.Ds[m]: self.Ds[m+1]]
             # Last parameter: fix the length (because the #dimensions of each subspace is not equivalent).
             # vq from scipy: distance measure?

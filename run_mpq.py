@@ -3,7 +3,6 @@ from transformer import *
 from vecs_io import loader
 from prettytable import PrettyTable
 import time
-import numpy as np
 
 
 def chunk_encode(mpq, vecs):
@@ -23,8 +22,8 @@ def chunk_encode(mpq, vecs):
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
     Q = Q[0:100, :]
-    np.random.seed(123)
-    f = open('MPQ_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), 'w')
+    np.random.seed()
+    f = open('./data/result/threshold_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), 'w')
     f.write('################################################################')
     f.write('################################################################\n')
     f.write('################################################################')
@@ -63,9 +62,10 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
 
     print("# Sorting items...")
     Ts = [2 ** i for i in range(2 + int(math.log2(len(X))))]
-    recalls = BatchSorter(vecs_encoded, query_encoded, X,
-                          G, Ts, metric='multitable', batch_size=200).recall()
+    recalls, collides = BatchSorter(vecs_encoded, query_encoded, X,
+                          G, Ts, metric='multitable', batch_size=200).result()
     print("# Finish searching!\n")
+    
 
     finish_time = time.time()
     f.write('# Training time:{t}.\n'.format(t=train_time - start_time))
@@ -84,6 +84,7 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     print(table)
     f.write(table.get_string())
     f.close()
+    np.savetxt('./data/result/mpq_{a}_{b}_{c}_collide.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), collides)
     # print("expected items, overall time, avg recall, avg precision, avg error, avg items")
     # for i, (t, recall) in enumerate(zip(Ts, recalls)):
     #     print("{}, {}, {}, {}, {}, {}".format(

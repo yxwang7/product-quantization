@@ -1,8 +1,6 @@
-from sorter import *
-from transformer import *
 from vecs_io import loader
-from prettytable import PrettyTable
-import time
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def parse_args():
@@ -30,7 +28,12 @@ if __name__ == '__main__':
         import warnings
         warnings.warn("Using default Parameters ")
 
-    filename = '{a}_{b}_{c}_{d}_stat.txt'.format(a=alg, b=metric, c=ndata, d=num_table)
-    x = np.fromfile(filename) 
+    filename = './data/result/{a}_{b}_{c}_{d}_stat.txt'.format(a=alg, b=metric, c=ndata, d=num_table)
+    x = np.loadtxt(filename) 
 
-    print(x)
+    # plt.hist(x, bins=range(100,129))  # arguments are passed to np.histogram
+    
+    index = np.where(x==0)[0][0]
+    plt.plot(range(0,index), x[0:index])
+    plt.title("Average collide number v.s. ranking")
+    plt.savefig('./data/fig/{a}_{b}_{c}_{d}_collide.pdf'.format(a=alg, b=metric, c=ndata, d=num_table), format='pdf')

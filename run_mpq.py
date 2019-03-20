@@ -22,8 +22,7 @@ def chunk_encode(mpq, vecs):
 
 def execute(mpq, X, T, Q, G, metric, train_size=100000):
     Q = Q[0:100, :]
-    np.random.seed()
-    f = open('./data/result/threshold_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), 'w')
+    f = open('./data/result/mpq_{a}_{b}_{c}_result.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), 'w')
     f.write('################################################################')
     f.write('################################################################\n')
     f.write('################################################################')
@@ -84,7 +83,7 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     print(table)
     f.write(table.get_string())
     f.close()
-    np.savetxt('./data/result/mpq_{a}_{b}_{c}_collide.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), collides)
+    np.savetxt('./data/result/mpq_prod_{a}_{b}_{c}_stat.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), collides)
     # print("expected items, overall time, avg recall, avg precision, avg error, avg items")
     # for i, (t, recall) in enumerate(zip(Ts, recalls)):
     #     print("{}, {}, {}, {}, {}, {}".format(

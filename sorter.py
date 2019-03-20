@@ -66,7 +66,7 @@ def euclidean_norm_arg_sort(q, compressed, norms_sqr):
 @nb.jit
 def multiple_table_sort(q_encoded, vecs_encoded):
     distances = np.zeros(vecs_encoded.shape[1], dtype=np.int32)
-    mid = (np.sum(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2) / q_encoded.shape[1]).astype(float) > 0.5 
+    mid = (np.prod(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2)).astype(bool)
     # mid = np.sum(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2).astype(bool)
         # for i in nb.prange(vecs_encoded.shape[1]):
         #     distances[h, i] = 0 if np.array_equal(q_encoded[h, :], vecs_encoded[h, i, :]) else 1
@@ -125,7 +125,7 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
     else:
         for i in p_range:
             rank[i, :] = euclidean_arg_sort(Q[i], compressed)
-    return rank, dist_sum.astype(int) # rank: sizeof(Q) \times top-k matrix
+    return rank, dist_sum # rank: sizeof(Q) \times top-k matrix
 
 
 @nb.jit
@@ -161,7 +161,7 @@ class BatchSorter(object):
         self.Q = Q
         self.X = X
         self.recalls = np.zeros(shape=(len(Ts)))
-        self.collide_stats = np.zeros(compressed.shape[1])
+        self.collide_stats = np.zeros(shape=compressed.shape[1])
         for i in tqdm.tqdm(range(math.ceil(len(Q) / float(batch_size)))):
             q = None
             if metric == 'multitable' or metric == 'multihamming':
@@ -174,7 +174,8 @@ class BatchSorter(object):
             self.recalls[:] = self.recalls[:] + [sorter.sum_recall(g, t) for t in Ts]
             self.collide_stats = self.collide_stats + sorter.dist_sum
         self.recalls = self.recalls / len(self.Q)
-        self.collide_stats /= len(self.Q)
+        self.collide_stats = self.collide_stats / len(self.Q)
+        self.collide_stats = compressed.shape[0] - self.collide_stats
 
     def recall(self):
         return self.recalls

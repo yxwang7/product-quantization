@@ -29,7 +29,9 @@ if __name__ == '__main__':
         warnings.warn("Using default Parameters ")
 
     filename = './data/result/{a}_{b}_{c}_{d}_stat.txt'.format(a=alg, b=metric, c=ndata, d=num_table)
+    filecatch = './data/result/{a}_{b}_{c}_{d}_catch.txt'.format(a=alg, b=metric, c=ndata, d=num_table)
     x = np.loadtxt(filename) 
+    catch = np.loadtxt(filename) 
 
     # plt.hist(x, bins=range(100,129))  # arguments are passed to np.histogram
     
@@ -37,3 +39,8 @@ if __name__ == '__main__':
     plt.plot(range(0,index), x[0:index])
     plt.title("Average collide number v.s. ranking")
     plt.savefig('./data/fig/{a}_{b}_{c}_{d}_collide.pdf'.format(a=alg, b=metric, c=ndata, d=num_table), format='pdf')
+
+    plt.clf()
+    plt.title("Average probe rate for top-K neighbors.")
+    plt.hist(catch, bins='auto')
+    plt.savefig('./data/fig/{a}_{b}_{c}_{d}_probe.pdf'.format(a=alg, b=metric, c=ndata, d=num_table), format='pdf')

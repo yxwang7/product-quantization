@@ -61,7 +61,7 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
 
     print("# Sorting items...")
     Ts = [2 ** i for i in range(2 + int(math.log2(len(X))))]
-    recalls, collides = BatchSorter(vecs_encoded, query_encoded, X,
+    recalls, collides, catch = BatchSorter(vecs_encoded, query_encoded, X,
                           G, Ts, metric='multitable', batch_size=200).result()
     print("# Finish searching!\n")
     
@@ -84,6 +84,7 @@ def execute(mpq, X, T, Q, G, metric, train_size=100000):
     f.write(table.get_string())
     f.close()
     np.savetxt('./data/result/mpq_prod_{a}_{b}_{c}_stat.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), collides)
+    np.savetxt('./data/result/mpq_prod_{a}_{b}_{c}_catch.txt'.format(a=metric, b=X.shape[0], c=mpq.numTable), catch)
     # print("expected items, overall time, avg recall, avg precision, avg error, avg items")
     # for i, (t, recall) in enumerate(zip(Ts, recalls)):
     #     print("{}, {}, {}, {}, {}, {}".format(

@@ -6,7 +6,6 @@ import tqdm
 import numba as nb
 
 
-
 class PQ(object):
     def __init__(self, M, Ks, verbose=True):
         assert 0 < Ks <= 2 ** 32
@@ -93,6 +92,7 @@ class MPQ(object):
     def class_message(self):
         return "#PQ Table: {}, ".format(self.numTable) + self.tables[0].class_message()
 
+    @nb.jit
     def fit(self, vecs, iter):
         print('\n# Start training...')
 
@@ -107,6 +107,7 @@ class MPQ(object):
                 self.tables[i].fit(vecs[:, self.permutations[i]], iter)
         print('# Training finish!\n')
 
+    @nb.jit
     def encode(self, vecs):
         assert vecs.dtype == np.float32
         assert vecs.ndim == 2
@@ -118,6 +119,7 @@ class MPQ(object):
                 vecs[:, self.permutations[i]])
         return codes
 
+    @nb.jit
     def decode(self, codes):
         assert codes.ndim == 3
         nTable, N, M = codes.shape

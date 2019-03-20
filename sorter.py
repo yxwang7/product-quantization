@@ -131,9 +131,13 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
 @nb.jit
 def true_positives(topK, Q, G, T):
     result = np.empty(shape=(len(Q)))
+    catch = np.zeros(shape=T)
     for i in nb.prange(len(Q)):
-        result[i] = len(np.intersect1d(G[i], topK[i][:T]))
-    return result
+        intersect = np.intersect1d(G[i], topK[i][:T])
+        result[i] = len(intersect)
+        for num in intersect:
+            catch[num] = catch[num] + 1
+    return result, catch
 
 
 class Sorter(object):
@@ -145,15 +149,16 @@ class Sorter(object):
     def recall(self, G, T):
         t = min(T, len(self.topK[0]))
         # Compute the average recall on Q
-        return t, self.sum_recall(G, T) / len(self.Q)
+        sumRecall, _ = self.sum_recall(G, T)
+        return t, sumRecall / len(self.Q)
 
     def sum_recall(self, G, T):
         assert len(self.Q) == len(self.topK), "number of query not equals"
         assert len(self.topK) <= len(G), "number of queries should not exceed the number of queries in ground truth"
         # Compute #TP for each q \in Q
         # G: the KNN computed by PQ algorithm
-        true_positive = true_positives(self.topK, self.Q, G, T)
-        return np.sum(true_positive) / len(G[0])  # TP / K
+        true_positive, catch = true_positives(self.topK, self.Q, G, T)
+        return np.sum(true_positive) / len(G[0]), catch / len(G[0]) # TP / K
 
 
 class BatchSorter(object):
@@ -162,6 +167,7 @@ class BatchSorter(object):
         self.X = X
         self.recalls = np.zeros(shape=(len(Ts)))
         self.collide_stats = np.zeros(shape=compressed.shape[1])
+        self.catch = np.zeros(shape=(len(Ts)))
         for i in tqdm.tqdm(range(math.ceil(len(Q) / float(batch_size)))):
             q = None
             if metric == 'multitable' or metric == 'multihamming':
@@ -171,9 +177,12 @@ class BatchSorter(object):
             g = G[i * batch_size: (i + 1) * batch_size, :]
             # compressed: compressed database; q: part of query; X: original database
             sorter = Sorter(compressed, q, X, metric=metric, norms_sqr=norms_sqr)
-            self.recalls[:] = self.recalls[:] + [sorter.sum_recall(g, t) for t in Ts]
+            rec, cat = zip(*[sorter.sum_recall(g, t) for t in Ts])
+            self.recalls[:] = self.recalls[:] + rec
+            self.catch = self.catch + cat
             self.collide_stats = self.collide_stats + sorter.dist_sum
         self.recalls = self.recalls / len(self.Q)
+        self.catch   = self.catch / len(self.Q)
         self.collide_stats = self.collide_stats / len(self.Q)
         self.collide_stats = compressed.shape[0] - self.collide_stats
 
@@ -183,5 +192,8 @@ class BatchSorter(object):
     def collide_stat(self):
         return self.collide_stats
 
+    def catch_stat(self):
+        return self.catch
+
     def result(self):
-        return self.recalls, self.collide_stats
+        return self.recalls, self.collide_stats, self.catch

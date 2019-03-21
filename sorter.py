@@ -5,6 +5,8 @@ import math
 import tqdm
 from scipy.spatial.distance import hamming
 
+
+RANK_STAT_NUM=4096
 @nb.jit
 def arg_sort(distances): # Return indices of top-k neighbors
     top_k = min(131072, len(distances)-1)
@@ -64,14 +66,14 @@ def euclidean_norm_arg_sort(q, compressed, norms_sqr):
 #     return arg_sort(distances)
 
 @nb.jit
-def multiple_table_sort(q_encoded, vecs_encoded):
+def multiple_table_sort(q_encoded, vecs_encoded, G):
     distances = np.zeros(vecs_encoded.shape[1], dtype=np.int32)
     mid = (np.prod(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2)).astype(bool)
     # mid = np.sum(q_encoded != np.transpose(vecs_encoded, (1,0,2)), axis=2).astype(bool)
         # for i in nb.prange(vecs_encoded.shape[1]):
         #     distances[h, i] = 0 if np.array_equal(q_encoded[h, :], vecs_encoded[h, i, :]) else 1
     distances = np.sum(mid.astype(int), axis=1)
-    return arg_sort_stat(distances)
+    return arg_sort_stat(distances), q_encoded.shape[0] - distances[G[:RANK_STAT_NUM]]
 
 @nb.jit
 def multiple_hamming_sort(q_encoded, vecs_encoded):
@@ -83,7 +85,7 @@ def multiple_hamming_sort(q_encoded, vecs_encoded):
     return arg_sort_stat(distances)
 
 @nb.jit
-def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
+def parallel_sort(metric, compressed, Q, X, G = None, norms_sqr=None):
     """
     for each q in 'Q', sort the compressed items in 'compressed' by their distance,
     where distance is determined by 'metric'
@@ -93,7 +95,13 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
     :return:
     """
     rank = None
+
     dist_sum = np.zeros(compressed.shape[1])
+    if G is not None:
+        probe    = np.zeros(RANK_STAT_NUM)
+    else:
+        probe    = None
+
     if metric == 'multitable' or metric == 'multihamming':
         rank = np.empty((Q.shape[0], min(131072, compressed.shape[1]-1)), dtype=np.int32)
     else:
@@ -116,8 +124,9 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
             rank[i, :] = euclidean_norm_arg_sort(Q[i], compressed, norms_sqr)
     elif metric == 'multitable':
         for i in p_range:
-            rank[i, :], x = multiple_table_sort(Q[i], compressed)
-            dist_sum = dist_sum + x
+            rank[i, :], x, catch = multiple_table_sort(Q[i], compressed, G[i])
+            dist_sum             = dist_sum + x
+            probe                = probe + catch
     elif metric == 'multihamming':
         for i in p_range:
             rank[i, :], x = multiple_hamming_sort(Q[i], compressed)
@@ -125,26 +134,23 @@ def parallel_sort(metric, compressed, Q, X, norms_sqr=None):
     else:
         for i in p_range:
             rank[i, :] = euclidean_arg_sort(Q[i], compressed)
-    return rank, dist_sum # rank: sizeof(Q) \times top-k matrix
+    return rank, dist_sum, probe# rank: sizeof(Q) \times top-k matrix
 
 
 @nb.jit
 def true_positives(topK, Q, G, T):
     result = np.empty(shape=(len(Q)))
-    catch = np.zeros(shape=T)
     for i in nb.prange(len(Q)):
         intersect = np.intersect1d(G[i], topK[i][:T])
         result[i] = len(intersect)
-        for num in intersect:
-            catch[num] = catch[num] + 1
-    return result, catch
+    return result
 
 
 class Sorter(object):
-    def __init__(self, compressed, Q, X, metric, norms_sqr=None):
+    def __init__(self, compressed, Q, X, metric, G=None, norms_sqr=None):
         self.Q = Q
         self.X = X
-        self.topK, self.dist_sum = parallel_sort(metric, compressed, Q, X, norms_sqr=norms_sqr)  
+        self.topK, self.dist_sum, self.probe = parallel_sort(metric, compressed, Q, X, G=G, norms_sqr=norms_sqr)  
 
     def recall(self, G, T):
         t = min(T, len(self.topK[0]))
@@ -157,8 +163,8 @@ class Sorter(object):
         assert len(self.topK) <= len(G), "number of queries should not exceed the number of queries in ground truth"
         # Compute #TP for each q \in Q
         # G: the KNN computed by PQ algorithm
-        true_positive, catch = true_positives(self.topK, self.Q, G, T)
-        return np.sum(true_positive) / len(G[0]), catch / len(G[0]) # TP / K
+        true_positive = true_positives(self.topK, self.Q, G, T)
+        return np.sum(true_positive) / len(G[0]) # TP / K
 
 
 class BatchSorter(object):
@@ -167,7 +173,8 @@ class BatchSorter(object):
         self.X = X
         self.recalls = np.zeros(shape=(len(Ts)))
         self.collide_stats = np.zeros(shape=compressed.shape[1])
-        self.catch = np.zeros(shape=(len(Ts)))
+        self.probe         = np.zeros(RANK_STAT_NUM)
+        # self.catch = np.zeros(shape=(len(Ts)))
         for i in tqdm.tqdm(range(math.ceil(len(Q) / float(batch_size)))):
             q = None
             if metric == 'multitable' or metric == 'multihamming':
@@ -176,14 +183,16 @@ class BatchSorter(object):
                 q = Q[i * batch_size: (i + 1) * batch_size, :]
             g = G[i * batch_size: (i + 1) * batch_size, :]
             # compressed: compressed database; q: part of query; X: original database
-            sorter = Sorter(compressed, q, X, metric=metric, norms_sqr=norms_sqr)
-            rec, cat = zip(*[sorter.sum_recall(g, t) for t in Ts])
+            sorter          = Sorter(compressed, q, X, metric=metric, norms_sqr=norms_sqr, G=G)
+            rec, cat        = zip(*[sorter.sum_recall(g, t) for t in Ts])
             self.recalls[:] = self.recalls[:] + rec
-            self.catch = self.catch + cat
+            # self.catch = self.catch + cat
             self.collide_stats = self.collide_stats + sorter.dist_sum
-        self.recalls = self.recalls / len(self.Q)
-        self.catch   = self.catch / len(self.Q)
+            self.probe         = self.probe + sorter.probe
+
+        self.recalls       = self.recalls / len(self.Q)
         self.collide_stats = self.collide_stats / len(self.Q)
+        self.probe         = self.probe         / len(self.Q)
         self.collide_stats = compressed.shape[0] - self.collide_stats
 
     def recall(self):
@@ -192,8 +201,11 @@ class BatchSorter(object):
     def collide_stat(self):
         return self.collide_stats
 
-    def catch_stat(self):
-        return self.catch
+    def rank_stat(self):
+        return self.probe
+
+    # def catch_stat(self):
+    #     return self.catch
 
     def result(self):
-        return self.recalls, self.collide_stats, self.catch
+        return self.recalls, self.collide_stats, self.probe
